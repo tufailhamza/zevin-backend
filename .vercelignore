@@ -19,7 +19,6 @@ RFL.py
 !README.md
 DEPLOY_QUICK_START.md
 VERCEL_DEPLOYMENT.md
-perplexity_analysis_results_*.json
 app/services/__pycache__/
 app/routers/__pycache__/
 *.log
