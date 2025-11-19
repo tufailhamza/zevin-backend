@@ -15,10 +15,12 @@ ENV/
 RFL.py
 *.json
 !requirements.txt
+!perplexity_analysis_results_*.json
 *.md
 !README.md
 DEPLOY_QUICK_START.md
 VERCEL_DEPLOYMENT.md
+VERCEL_SIZE_OPTIMIZATION.md
 app/services/__pycache__/
 app/routers/__pycache__/
 *.log
