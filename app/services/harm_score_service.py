@@ -3,7 +3,7 @@ from typing import Dict, List, Optional
 import numpy as np
 
 def calculate_portfolio_harm_scores(holdings: Optional[pd.DataFrame] = None) -> Dict:
-    """Calculate portfolio harm scores using Sector Mean Score from displayed bonds"""
+    """Calculate portfolio harm scores for bonds using weighted average based on portfolio allocation percentages"""
     
     if holdings is None or holdings.empty:
         return {
@@ -12,36 +12,61 @@ def calculate_portfolio_harm_scores(holdings: Optional[pd.DataFrame] = None) -> 
             'quartile': "N/A"
         }
     
-    sector_mean_scores = []
-    security_mean_scores = []
+    weighted_scores = []
+    total_allocation = 0.0
     
     for _, row in holdings.iterrows():
-        sector_mean_score = row.get('Sector Mean Score', 0)
-        security_mean_score = row.get('Security Mean Score', 0)
-        
+        # Get portfolio allocation (weight) as percentage
+        weight = row.get('weight', 0) or row.get('Weight', 0)
+        if pd.isna(weight) or weight is None:
+            weight = 0
         try:
-            score_str = str(sector_mean_score).replace(',', '').replace('$', '').strip()
-            if score_str and score_str != '0' and score_str != '0.0':
-                sector_mean_scores.append(float(score_str))
+            weight = float(weight)
         except (ValueError, TypeError):
-            pass
+            weight = 0
         
+        # Get sector mean score (harm score for the asset)
+        sector_score = row.get('Sector Mean Score', 0) or row.get('sector_mean_score', 0)
+        if pd.isna(sector_score) or sector_score is None:
+            sector_score = 0
         try:
-            security_str = str(security_mean_score).replace(',', '').replace('$', '').strip()
-            if security_str and security_str != '0' and security_str != '0.0':
-                security_mean_scores.append(float(security_str))
+            sector_score = float(str(sector_score).replace(',', '').replace('$', '').strip())
         except (ValueError, TypeError):
-            pass
+            sector_score = 0
+        
+        # Calculate weighted score: p_i * s_i
+        if weight > 0 and sector_score > 0:
+            weighted_score = weight * sector_score
+            weighted_scores.append(weighted_score)
+            total_allocation += weight
     
-    if len(sector_mean_scores) == 0:
+    if len(weighted_scores) == 0 or total_allocation == 0:
         return {
             'average_score': 0.0,
             'total_score': 0.0,
             'quartile': "N/A"
         }
     
-    average_score = sum(sector_mean_scores) / len(sector_mean_scores)
-    total_score = sum(security_mean_scores) / len(security_mean_scores) if len(security_mean_scores) > 0 else 0
+    # Calculate weighted average: sum(p_i * s_i) / sum(p_i)
+    # If allocations sum to 100%, the sum is the portfolio's weighted harm score
+    if abs(total_allocation - 100.0) < 0.01:  # Allow small floating point differences
+        # Allocations sum to 100%, so the sum is the portfolio's weighted harm score
+        average_score = sum(weighted_scores)
+    else:
+        # Divide by total allocation if not exactly 100%
+        average_score = sum(weighted_scores) / total_allocation
+    
+    # For total_score, sum all Security Total Scores (weighted)
+    total_score = 0.0
+    for _, row in holdings.iterrows():
+        security_total = row.get('Security Total Score', 0) or row.get('security_total_score', 0)
+        if pd.isna(security_total) or security_total is None:
+            security_total = 0
+        try:
+            security_total = float(str(security_total).replace(',', '').replace('$', '').strip())
+        except (ValueError, TypeError):
+            security_total = 0
+        total_score += security_total
     
     quartile = "N/A"
     if average_score <= 38.80:
@@ -60,7 +85,7 @@ def calculate_portfolio_harm_scores(holdings: Optional[pd.DataFrame] = None) -> 
     }
 
 def calculate_portfolio_harm_scores_stocks(stock_holdings: Optional[pd.DataFrame] = None) -> Dict:
-    """Calculate portfolio harm scores for stocks"""
+    """Calculate portfolio harm scores for stocks using weighted average based on portfolio allocation percentages"""
     
     if stock_holdings is None or stock_holdings.empty:
         return {
@@ -69,38 +94,61 @@ def calculate_portfolio_harm_scores_stocks(stock_holdings: Optional[pd.DataFrame
             'quartile': "N/A"
         }
     
-    sector_mean_scores = []
-    security_mean_scores = []
+    weighted_scores = []
+    total_allocation = 0.0
     
     for _, row in stock_holdings.iterrows():
-        sector_score = row.get('Sector Mean Score', 0)
+        # Get portfolio allocation (weight) as percentage
+        weight = row.get('weight', 0) or row.get('Weight', 0)
+        if pd.isna(weight) or weight is None:
+            weight = 0
+        try:
+            weight = float(weight)
+        except (ValueError, TypeError):
+            weight = 0
+        
+        # Get sector mean score (harm score for the asset)
+        sector_score = row.get('Sector Mean Score', 0) or row.get('sector_mean_score', 0)
         if pd.isna(sector_score) or sector_score is None:
             sector_score = 0
         try:
-            sector_score = float(sector_score)
+            sector_score = float(str(sector_score).replace(',', '').replace('$', '').strip())
         except (ValueError, TypeError):
             sector_score = 0
         
-        security_score = row.get('Security Mean Score', 0)
-        if pd.isna(security_score) or security_score is None:
-            security_score = 0
-        try:
-            security_score = float(str(security_score).replace(',', ''))
-        except (ValueError, TypeError):
-            security_score = 0
-        
-        sector_mean_scores.append(sector_score)
-        security_mean_scores.append(security_score)
+        # Calculate weighted score: p_i * s_i
+        if weight > 0 and sector_score > 0:
+            weighted_score = weight * sector_score
+            weighted_scores.append(weighted_score)
+            total_allocation += weight
     
-    if len(sector_mean_scores) == 0 or len(security_mean_scores) == 0:
+    if len(weighted_scores) == 0 or total_allocation == 0:
         return {
             'average_score': 0.0,
             'total_score': 0.0,
             'quartile': "N/A"
         }
     
-    average_score = sum(sector_mean_scores) / len(sector_mean_scores)
-    total_score = sum(security_mean_scores) / len(security_mean_scores)
+    # Calculate weighted average: sum(p_i * s_i) / sum(p_i)
+    # If allocations sum to 100%, the sum is the portfolio's weighted harm score
+    if abs(total_allocation - 100.0) < 0.01:  # Allow small floating point differences
+        # Allocations sum to 100%, so the sum is the portfolio's weighted harm score
+        average_score = sum(weighted_scores)
+    else:
+        # Divide by total allocation if not exactly 100%
+        average_score = sum(weighted_scores) / total_allocation
+    
+    # For total_score, sum all Security Total Scores (weighted)
+    total_score = 0.0
+    for _, row in stock_holdings.iterrows():
+        security_total = row.get('Security Total Score', 0) or row.get('security_total_score', 0)
+        if pd.isna(security_total) or security_total is None:
+            security_total = 0
+        try:
+            security_total = float(str(security_total).replace(',', '').replace('$', '').strip())
+        except (ValueError, TypeError):
+            security_total = 0
+        total_score += security_total
     
     quartile = "N/A"
     if average_score <= 38.80:

@@ -13,13 +13,19 @@ def get_bond_info(cusip: str) -> Optional[Dict]:
         response.raise_for_status()
         data = response.json()
         
+        # Handle None values - ensure strings are never None
+        name = data.get('Name')
+        industry_group = data.get('ClassificationData', {}).get('IndustryGroup')
+        issuer = data.get('IssueData', {}).get('Issuer')
+        maturity_date = data.get('Maturity_Date')
+        
         bond_info = {
-            'Name': data.get('Name', 'Unknown'),
-            'Industry Group': data.get('ClassificationData', {}).get('IndustryGroup', 'Unknown'),
-            'Issuer': data.get('IssueData', {}).get('Issuer', 'Unknown'),
+            'Name': name if name is not None and name != '' else 'Unknown',
+            'Industry Group': industry_group if industry_group is not None and industry_group != '' else 'Unknown',
+            'Issuer': issuer if issuer is not None and issuer != '' else 'Unknown',
             'Current Price': float(data.get('Price') or '0'),
             'Coupon': float(data.get('Coupon') or '0'),
-            'Maturity Date': data.get('Maturity_Date', 'Unknown'),
+            'Maturity Date': maturity_date if maturity_date is not None and maturity_date != '' else 'Unknown',
             'YTM': float(data.get('YieldToMaturity') or '0'),
         }
         

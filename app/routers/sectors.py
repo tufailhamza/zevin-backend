@@ -41,6 +41,11 @@ async def get_available_sectors():
                     sectors.add(sector)
         
         final_sectors = sorted(list(sectors))
+        
+        # Filter out excluded sectors
+        excluded_sectors = ['Consumer Discretionary', 'Agency Bonds - FFCB', 'Consumer Staples']
+        final_sectors = [sector for sector in final_sectors if sector not in excluded_sectors]
+        
         print(f"Final sectors list ({len(final_sectors)} sectors): {final_sectors}")
         print("=" * 50)
         

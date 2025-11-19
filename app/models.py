@@ -6,17 +6,13 @@ from datetime import date, datetime
 class StockInfoRequest(BaseModel):
     """Request to get stock info - frontend sends this"""
     ticker: str
-    units: int
-    purchase_date: date
-    purchase_price: Optional[float] = None
+    weight: float  # Portfolio allocation percentage (e.g., 20.5 for 20.5%)
 
 # Bond Models - For calculating info from frontend data
 class BondInfoRequest(BaseModel):
     """Request to get bond info - frontend sends this"""
     cusip: str = Field(..., min_length=9, max_length=9)
-    units: int
-    purchase_price: float
-    purchase_date: date
+    weight: float  # Portfolio allocation percentage (e.g., 20.5 for 20.5%)
 
 # Portfolio Models
 class PortfolioHarmScores(BaseModel):
@@ -66,14 +62,7 @@ class ReportRequest(BaseModel):
 # Stock Info Response (for calculation endpoint)
 class StockInfoResponse(BaseModel):
     stock: str
-    units: int
-    purchase_date: date
-    purchase_price: float
-    current_price: float
-    initial_investment: float
-    current_value: float
-    gain_loss: float
-    gain_loss_percentage: float
+    weight: float  # Portfolio allocation percentage
     sector: str
     sector_total_score: Optional[float] = None
     sector_mean_score: Optional[float] = None
@@ -83,21 +72,8 @@ class StockInfoResponse(BaseModel):
 # Bond Info Response (for calculation endpoint)
 class BondInfoResponse(BaseModel):
     cusip: str
-    name: str
+    weight: float  # Portfolio allocation percentage
     industry_group: str
-    issuer: str
-    units: int
-    purchase_price: float
-    purchase_date: date
-    current_price: float
-    coupon: float
-    maturity_date: Optional[str] = None
-    ytm: float
-    market_value: Optional[float] = None
-    total_cost: Optional[float] = None
-    price_return: Optional[float] = None
-    income_return: Optional[float] = None
-    total_return: Optional[float] = None
     sector_total_score: Optional[float] = None
     sector_mean_score: Optional[float] = None
     security_total_score: Optional[float] = None

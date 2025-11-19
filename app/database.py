@@ -1,19 +1,14 @@
 from sqlalchemy import create_engine
 from sqlalchemy.ext.declarative import declarative_base
 from sqlalchemy.orm import sessionmaker
-import os
-from dotenv import load_dotenv
 
-load_dotenv()
-
-# Database configuration - using environment variables for security
-# Set these in your .env file (see .env.example)
+# Database configuration - matching RFL.py exactly
 db_config = {
-    'user': os.getenv('DB_USER', 'doadmin'),
-    'password': os.getenv('DB_PASSWORD', ''),
-    'host': os.getenv('DB_HOST', 'db-mysql-nyc3-25707-do-user-19616823-0.l.db.ondigitalocean.com'),
-    'port': os.getenv('DB_PORT', '25060'),
-    'database': os.getenv('DB_NAME', 'defaultdb')
+    'user': 'doadmin',
+    'password': 'AVNS_xKVgSkiz4gkauzSux86',
+    'host': 'db-mysql-nyc3-25707-do-user-19616823-0.l.db.ondigitalocean.com',
+    'port': 25060,
+    'database': 'defaultdb'
 }
 
 # Create SQLAlchemy connection string

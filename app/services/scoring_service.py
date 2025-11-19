@@ -78,16 +78,19 @@ def add_scoring_columns_to_stocks(df: pd.DataFrame, sector_scoring_df: pd.DataFr
 def add_scoring_columns_to_bonds1(df: pd.DataFrame, sector_scoring_df: pd.DataFrame) -> pd.DataFrame:
     """Add harm scoring columns to bond holdings dataframe using fuzzy-matched sector names."""
     
-    if df.empty or sector_scoring_df.empty:
+    if df.empty:
         return df
     
     df_copy = df.copy()
     
-    # Initialize scoring columns
+    # Initialize scoring columns (always initialize, even if sector_scoring_df is empty)
     df_copy['Sector Total Score'] = 0.0
     df_copy['Sector Mean Score'] = 0.0
     df_copy['Security Total Score'] = 0.0
     df_copy['Security Mean Score'] = 0.0
+    
+    if sector_scoring_df.empty:
+        return df_copy
 
     # Build a mapping of known sectors to their scores
     sector_mapping = {}
