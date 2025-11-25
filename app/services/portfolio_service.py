@@ -5,6 +5,7 @@ import requests
 import datetime
 from dateutil.relativedelta import relativedelta
 from typing import Dict, List, Optional
+from concurrent.futures import ThreadPoolExecutor, as_completed
 from app.services.bond_service import get_bond_info, calculate_returns
 from app.services.stock_service import get_stock_info, get_gics_sector
 from app.services.scoring_service import add_scoring_columns_to_stocks, add_scoring_columns_to_bonds1
@@ -220,4 +221,75 @@ def fetch_kataly_holdings():
         # Silently return empty DataFrame if database connection fails
         # This allows the app to work even when database is unavailable
         return pd.DataFrame()
+
+def _get_single_stock_info(ticker: str) -> Dict:
+    """Get current price and sector info for a single ticker (helper for parallel processing)"""
+    try:
+        # Get current price
+        current_price = get_current_price_direct(ticker)
+        if current_price is None:
+            # Fallback to yfinance
+            try:
+                stock = yf.Ticker(ticker)
+                hist = stock.history(period="1d")
+                if not hist.empty:
+                    current_price = float(hist.iloc[-1]['Close'])
+                else:
+                    current_price = 0.0
+            except Exception:
+                current_price = 0.0
+        
+        # Get sector
+        sector = get_gics_sector(ticker)
+        
+        # Create stock data structure
+        stock_data = {
+            'Stock': ticker,
+            'Current Price': current_price,
+            'Sector': sector,
+            'Units': 1  # Placeholder for scoring calculation
+        }
+        
+        return stock_data
+    except Exception as e:
+        print(f"Error processing ticker {ticker}: {e}")
+        # Return error entry
+        return {
+            'Stock': ticker,
+            'Current Price': 0.0,
+            'Sector': 'N/A',
+            'Units': 1
+        }
+
+def get_batch_stock_info(tickers: List[str]) -> List[Dict]:
+    """Get current price and sector info for multiple tickers using parallel processing"""
+    results = []
+    
+    # Use ThreadPoolExecutor for parallel processing (I/O-bound operations)
+    # Max workers set to 10 to avoid overwhelming the API
+    with ThreadPoolExecutor(max_workers=10) as executor:
+        # Submit all tasks
+        future_to_ticker = {executor.submit(_get_single_stock_info, ticker): ticker for ticker in tickers}
+        
+        # Collect results as they complete
+        for future in as_completed(future_to_ticker):
+            ticker = future_to_ticker[future]
+            try:
+                result = future.result()
+                results.append(result)
+            except Exception as e:
+                print(f"Error getting result for {ticker}: {e}")
+                # Add error entry
+                results.append({
+                    'Stock': ticker,
+                    'Current Price': 0.0,
+                    'Sector': 'N/A',
+                    'Units': 1
+                })
+    
+    # Sort results to maintain original ticker order
+    ticker_order = {ticker: idx for idx, ticker in enumerate(tickers)}
+    results.sort(key=lambda x: ticker_order.get(x['Stock'], 999))
+    
+    return results
 

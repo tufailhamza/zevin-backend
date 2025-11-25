@@ -8,6 +8,15 @@ class StockInfoRequest(BaseModel):
     ticker: str
     weight: float  # Portfolio allocation percentage (e.g., 20.5 for 20.5%)
 
+class BatchStockTicker(BaseModel):
+    """Ticker with weight for batch request"""
+    ticker: str
+    weight: float  # Portfolio allocation percentage
+
+class BatchStockInfoRequest(BaseModel):
+    """Request to get stock info for multiple tickers"""
+    tickers: List[BatchStockTicker]  # List of ticker symbols with weights
+
 # Bond Models - For calculating info from frontend data
 class BondInfoRequest(BaseModel):
     """Request to get bond info - frontend sends this"""
@@ -63,11 +72,27 @@ class ReportRequest(BaseModel):
 class StockInfoResponse(BaseModel):
     stock: str
     weight: float  # Portfolio allocation percentage
+    current_price: float  # Current stock price from yfinance
     sector: str
     sector_total_score: Optional[float] = None
     sector_mean_score: Optional[float] = None
     security_total_score: Optional[float] = None
     security_mean_score: Optional[float] = None
+
+class BatchStockInfoItem(BaseModel):
+    """Stock info item for batch response"""
+    ticker: str
+    weight: float  # Portfolio allocation percentage
+    current_price: float
+    sector: str
+    sector_total_score: Optional[float] = None
+    sector_mean_score: Optional[float] = None
+    security_total_score: Optional[float] = None
+    security_mean_score: Optional[float] = None
+
+class BatchStockInfoResponse(BaseModel):
+    """Batch stock info response"""
+    stocks: List[BatchStockInfoItem]
 
 # Bond Info Response (for calculation endpoint)
 class BondInfoResponse(BaseModel):

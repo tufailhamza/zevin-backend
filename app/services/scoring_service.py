@@ -32,14 +32,14 @@ def add_scoring_columns_to_stocks(df: pd.DataFrame, sector_scoring_df: pd.DataFr
         units = float(row.get('Units', 0)) if pd.notna(row.get('Units', 0)) else 0
         
         # Handle common sector name variations
+        # Note: Database has "Consumer Cyclical", not "Consumer Discretionary"
         sector_mappings = {
-            'Consumer Cyclical': 'Consumer Discretionary',
             'Consumer Non-Cyclical': 'Consumer Staples',
             'Financial': 'Financial Services'
         }
         if sector in sector_mappings:
             sector = sector_mappings[sector]
-            print(f"  Mapped sector to: {sector}")
+            print(f"  Mapped sector '{row.get('Sector', 'N/A')}' to: {sector}")
         
         # Try exact match first
         if sector in sector_mapping:

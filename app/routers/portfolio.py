@@ -1,10 +1,11 @@
 from fastapi import APIRouter, HTTPException
 from app.models import (
     StockInfoRequest, StockInfoResponse, BondInfoRequest, BondInfoResponse,
-    PortfolioStocksRequest, PortfolioBondsRequest, PortfolioHarmScores
+    PortfolioStocksRequest, PortfolioBondsRequest, PortfolioHarmScores,
+    BatchStockInfoRequest, BatchStockInfoResponse, BatchStockInfoItem, BatchStockTicker
 )
 from app.services.portfolio_service import (
-    calculate_stock_info, calculate_bond_info
+    calculate_stock_info, calculate_bond_info, get_batch_stock_info
 )
 from app.services.scoring_service import add_scoring_columns_to_stocks, add_scoring_columns_to_bonds1
 from app.services.sector_service import fetch_sector_scoring_data
@@ -21,8 +22,26 @@ async def get_stock_info(stock_request: StockInfoRequest):
         print(f"Ticker: {stock_request.ticker}")
         print(f"Weight: {stock_request.weight}%")
         
-        # Get sector for the ticker
+        # Get current price and sector for the ticker
         from app.services.stock_service import get_gics_sector
+        from app.services.portfolio_service import get_current_price_direct
+        
+        # Get current price
+        current_price = get_current_price_direct(stock_request.ticker)
+        if current_price is None:
+            # Fallback to yfinance
+            try:
+                import yfinance as yf
+                stock = yf.Ticker(stock_request.ticker)
+                hist = stock.history(period="1d")
+                if not hist.empty:
+                    current_price = float(hist.iloc[-1]['Close'])
+                else:
+                    raise ValueError(f"Unable to fetch current price for {stock_request.ticker}")
+            except Exception as e:
+                raise ValueError(f"Unable to fetch current price for {stock_request.ticker}. Error: {str(e)}")
+        
+        # Get sector
         sector = get_gics_sector(stock_request.ticker)
         
         if sector == 'N/A':
@@ -32,6 +51,7 @@ async def get_stock_info(stock_request: StockInfoRequest):
         stock_data = {
             'Stock': stock_request.ticker,
             'Weight': stock_request.weight,
+            'Current Price': current_price,
             'Sector': sector,
             'Units': stock_request.weight  # Use weight as Units for scoring calculation
         }
@@ -59,10 +79,14 @@ async def get_stock_info(stock_request: StockInfoRequest):
         security_total_score = sector_total_score
         security_mean_score = sector_mean_score
         
+        # Get current price
+        current_price = stock_data.get('Current Price', 0.0)
+        
         # Debug: Print scoring values
         print(f"Scoring values for {stock_data.get('Stock')}:")
         print(f"  Sector: {stock_data.get('Sector')}")
         print(f"  Weight: {weight}%")
+        print(f"  Current Price: ${current_price}")
         print(f"  Sector Total Score: {sector_total_score}")
         print(f"  Sector Mean Score: {sector_mean_score}")
         print(f"  Security Total Score: {security_total_score}")
@@ -71,6 +95,7 @@ async def get_stock_info(stock_request: StockInfoRequest):
         return StockInfoResponse(
             stock=stock_data['Stock'],
             weight=weight,
+            current_price=float(current_price) if current_price else 0.0,
             sector=stock_data['Sector'],
             sector_total_score=sector_total_score,
             sector_mean_score=sector_mean_score,
@@ -81,6 +106,84 @@ async def get_stock_info(stock_request: StockInfoRequest):
         raise HTTPException(status_code=400, detail=str(e))
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Error calculating stock info: {str(e)}")
+
+@router.post("/stocks/batch", response_model=BatchStockInfoResponse)
+async def get_batch_stock_info_endpoint(batch_request: BatchStockInfoRequest):
+    """Get stock information for multiple tickers including prices and scores"""
+    try:
+        print(f"\n=== Batch Stock Info Request ===")
+        print(f"Number of tickers: {len(batch_request.tickers)}")
+        
+        if not batch_request.tickers:
+            raise ValueError("Tickers list cannot be empty")
+        
+        # Extract ticker symbols and create weight mapping
+        ticker_list = [item.ticker for item in batch_request.tickers]
+        weight_map = {item.ticker: item.weight for item in batch_request.tickers}
+        
+        print(f"Tickers: {ticker_list}")
+        print(f"Weights: {weight_map}")
+        
+        # Get stock info for all tickers
+        stock_data_list = get_batch_stock_info(ticker_list)
+        
+        # Add weights to stock data
+        for stock_data in stock_data_list:
+            ticker = stock_data.get('Stock', '')
+            stock_data['Weight'] = weight_map.get(ticker, 0.0)
+            stock_data['Units'] = weight_map.get(ticker, 0.0)  # Use weight as Units for scoring
+        
+        # Convert to DataFrame for scoring
+        stocks_df = pd.DataFrame(stock_data_list)
+        
+        # Get sector scoring data and add scores
+        sector_scoring_df = fetch_sector_scoring_data()
+        if not sector_scoring_df.empty:
+            stocks_df = add_scoring_columns_to_stocks(stocks_df, sector_scoring_df)
+        else:
+            # If no sector scoring data, set defaults
+            stocks_df['Sector Total Score'] = 0.0
+            stocks_df['Sector Mean Score'] = 0.0
+            stocks_df['Security Total Score'] = 0.0
+            stocks_df['Security Mean Score'] = 0.0
+        
+        # Convert to response format
+        stock_items = []
+        for _, row in stocks_df.iterrows():
+            ticker = row.get('Stock', '')
+            weight = row.get('Weight', 0.0)
+            current_price = row.get('Current Price', 0.0)
+            sector = row.get('Sector', 'N/A')
+            sector_total_score = row.get('Sector Total Score', 0.0)
+            sector_mean_score = row.get('Sector Mean Score', 0.0)
+            
+            # Security scores equal sector scores (weighting applied in portfolio calculation)
+            security_total_score = sector_total_score
+            security_mean_score = sector_mean_score
+            
+            stock_items.append(BatchStockInfoItem(
+                ticker=ticker,
+                weight=float(weight) if weight else 0.0,
+                current_price=float(current_price) if current_price else 0.0,
+                sector=sector if sector else 'N/A',
+                sector_total_score=float(sector_total_score) if sector_total_score else 0.0,
+                sector_mean_score=float(sector_mean_score) if sector_mean_score else 0.0,
+                security_total_score=float(security_total_score) if security_total_score else 0.0,
+                security_mean_score=float(security_mean_score) if security_mean_score else 0.0
+            ))
+        
+        print(f"Processed {len(stock_items)} stocks")
+        print("=" * 50)
+        
+        return BatchStockInfoResponse(stocks=stock_items)
+        
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e))
+    except Exception as e:
+        print(f"Exception in batch stock endpoint: {type(e).__name__}: {str(e)}")
+        import traceback
+        print(f"Traceback: {traceback.format_exc()}")
+        raise HTTPException(status_code=500, detail=f"Error getting batch stock info: {str(e)}")
 
 @router.post("/bonds/info", response_model=BondInfoResponse)
 async def get_bond_info(bond_request: BondInfoRequest):
@@ -340,8 +443,8 @@ async def calculate_bond_harm_scores(portfolio_request: PortfolioBondsRequest):
                     # Add scoring columns
                     scoring_df = add_scoring_columns_to_bonds1(
                         scoring_df,
-                        sector_scoring_df
-                    )
+                    sector_scoring_df
+                )
                     
                     # Merge scoring columns back into the full DataFrame
                     for col in ['Sector Total Score', 'Sector Mean Score', 'Security Total Score', 'Security Mean Score']:
